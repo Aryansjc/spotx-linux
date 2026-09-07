@@ -14,10 +14,11 @@ optdepends=(
 )
 # Built from the same directory: spotx.sh, README.md live next to this PKGBUILD.
 # For a VCS package from git, switch to the -git style source below.
-source=('spotx.sh' 'README.md')
-sha256sums=('SKIP' 'SKIP')
+source=('spotx.sh' 'tools/generated_exp.inc' 'README.md')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm755 spotx.sh "$pkgdir/usr/bin/spotx"
+  install -Dm644 tools/generated_exp.inc "$pkgdir/usr/share/spotx-linux/generated_exp.inc"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

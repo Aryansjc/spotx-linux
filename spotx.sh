@@ -366,7 +366,21 @@ if [[ -n "$interactiveMode" && -z "$nonInteractive" ]]; then
 fi
 
 # --- run ---
-for e in "${aoEx[@]}"; do apply_patch "$e"; done
+# Full-version generated sets from vendor/patches.json (DisableExp/EnableExp).
+# Sourced from alongside the script when present (repo checkout or
+# /usr/share/spotx-linux install); falls back to the embedded minimal sets.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+genDisableEx=(); genEnableEx=()
+for _inc in "$SCRIPT_DIR/generated_exp.inc" "$SCRIPT_DIR/../share/spotx-linux/generated_exp.inc" \
+            "/usr/share/spotx-linux/generated_exp.inc" "$SCRIPT_DIR/tools/generated_exp.inc"; do
+  if [[ -f "$_inc" ]]; then
+    # shellcheck disable=SC1090
+    source "$_inc"; break
+  fi
+done
+unset _inc
+for e in "${aoEx[@]}" "${genDisableEx[@]}"; do apply_patch "$e"; done
+[[ "${#genDisableEx[@]}" -gt 0 ]] && echo -e "${green}Applied ${#genDisableEx[@]} synced disable-flags.${clr}"
 if [[ -z "$paidPremium" ]]; then
   for e in "${freeEx[@]}" "${binEx[@]}"; do apply_patch "$e"; done
   printf '\n%s\n' '.BKsbV2Xl786X9a09XROH{display:none}' >> "$xpuiCss"
@@ -374,7 +388,7 @@ if [[ -z "$paidPremium" ]]; then
 else echo "Premium mode: skipped ad patches."; fi
 
 if [[ -n "$devMode" ]]; then for e in "${devEx[@]}"; do apply_patch "$e"; done; echo -e "${green}Enabled dev mode.${clr}"; fi
-if [[ -z "$excludeExp" ]]; then for e in "${expEx[@]}"; do apply_patch "$e"; done; echo -e "${green}Enabled experimental features.${clr}";
+if [[ -z "$excludeExp" ]]; then for e in "${expEx[@]}" "${genEnableEx[@]}"; do apply_patch "$e"; done; echo -e "${green}Enabled experimental features (${#expEx[@]} base + ${#genEnableEx[@]} synced).${clr}";
 else echo "Skipped experimental features."; fi
 if [[ -n "$hideNonMusic" ]]; then for e in "${podEx[@]}"; do apply_patch "$e"; done; echo -e "${green}Hid non-music sections.${clr}"; fi
 if [[ -n "$oldUi" ]]; then echo -e "${yellow}Old UI only valid <=1.2.13.661; skipping auto logic in MVP (use -e set + manual).${clr}"; fi

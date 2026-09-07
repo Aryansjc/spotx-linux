@@ -80,18 +80,17 @@ Restores `spotify.bak` + `Apps/xpui.bak`.
 
 ## Status / roadmap to full parity
 
-MVP (`0.1.0`, verified with fake `xpui.spa`: patch + repack + uninstall round-trip
-works, `bash -n` clean):
-core adblock (`adsEnabled`, `allSponsorships`, product-state override,
-download-quality hide), logging block (`sentry.io`, `sp://logging/v3`),
-`bSlot`/`bLogic` ELF stubs, devmode, hide-non-music, equalizer/viewmode/
-sidebar/fullscreen/sleep-timer exp subset, lyrics-bg.
+Done (`0.1.0` + full-version step 1, fake-`xpui.spa` round-trips pass):
+core adblock, logging block, `bSlot`/`bLogic` ELF stubs, devmode,
+hide-non-music, base exp subset, lyrics-bg — plus **223 synced flags**
+(`tools/generated_exp.inc`, built from `vendor/patches.json` via
+`tools/sync_from_patches.py`: 92 `DisableExp`→false always-on,
+131 `EnableExp`→true with exp; version-gated, verified: out-of-range
+flags correctly skipped).
 
-Next for full `SpotX-Windows` parity: sync the full `patches/patches.json`
-(`DisableExp`/`EnableExp`/`CustomExp` ~150 flags, `new_theme`, `cache_limit`,
-`goofyHistory`, `sectionBlock.js` injection, `lyrics_stat` colors) into the
-`aoEx/expEx` arrays, and validate ELF binary patches against real Linux
-`spotify` builds per version.
+Still open: `CustomExp` value-flags (21), `new_theme`/`cache_limit`/
+`goofyHistory`/`sectionBlock.js` injection/`lyrics_stat` colors,
+ELF `block_slots` validation against real Linux builds, real-client test.
 
 ## Credits / license
 
