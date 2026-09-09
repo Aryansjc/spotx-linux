@@ -80,17 +80,17 @@ Restores `spotify.bak` + `Apps/xpui.bak`.
 
 ## Status / roadmap to full parity
 
-Done (`0.1.0` + full-version step 1, fake-`xpui.spa` round-trips pass):
+Done (`0.1.0` + full-version steps 1–2, fake-`xpui.spa` round-trips pass):
 core adblock, logging block, `bSlot`/`bLogic` ELF stubs, devmode,
-hide-non-music, base exp subset, lyrics-bg — plus **223 synced flags**
+hide-non-music, base exp subset, lyrics-bg — plus **244 synced flags**
 (`tools/generated_exp.inc`, built from `vendor/patches.json` via
-`tools/sync_from_patches.py`: 92 `DisableExp`→false always-on,
-131 `EnableExp`→true with exp; version-gated, verified: out-of-range
-flags correctly skipped).
+`tools/sync_from_patches.py`: 92 `DisableExp`→false + 5 ad-suppress
+`CustomExp` always-on, 131 `EnableExp`→true + 16 feature `CustomExp`
+with exp; all version-gated and `--noexp`-aware, verified).
 
-Still open: `CustomExp` value-flags (21), `new_theme`/`cache_limit`/
-`goofyHistory`/`sectionBlock.js` injection/`lyrics_stat` colors,
-ELF `block_slots` validation against real Linux builds, real-client test.
+Still open: `new_theme`/`cache_limit`/`goofyHistory`/`sectionBlock.js`
+injection/`lyrics_stat` colors, ELF `block_slots` validation against real
+Linux builds, real-client test.
 
 ## Credits / license
 
