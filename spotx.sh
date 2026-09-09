@@ -79,7 +79,7 @@ while [[ $# -gt 0 ]]; do
     -l|--lyricsbg) lyricsBg='true'; shift ;;
     -c|--clearcache) clearCache='true'; shift ;;
     -f|--force) forceSpotx='true'; shift ;;
-    -P|--path) installPath="${2:-}"; installPathSet='true'; shift 2 ;;
+    -P|--path) [[ -n "${2:-}" ]] || { echo -e "${red}Error:${clr} -P/--path needs a directory argument." >&2; exit 1; }; installPath="$2"; installPathSet='true'; shift 2 ;;
     -i|--interactive) interactiveMode='true'; shift ;;
     --noninteractive) nonInteractive='true'; shift ;;
     --nocolor) clr=''; green=''; red=''; yellow=''; shift ;;
