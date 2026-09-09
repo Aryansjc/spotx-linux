@@ -78,19 +78,23 @@ Flatpak system+user locations, `spotify` on `PATH`, bounded `find` fallback.
 
 Restores `spotify.bak` + `Apps/xpui.bak`.
 
-## Status / roadmap to full parity
+## Status / testing
 
-Done (`0.1.0` + full-version steps 1–2, fake-`xpui.spa` round-trips pass):
-core adblock, logging block, `bSlot`/`bLogic` ELF stubs, devmode,
-hide-non-music, base exp subset, lyrics-bg — plus **244 synced flags**
-(`tools/generated_exp.inc`, built from `vendor/patches.json` via
+**Real-client tested 17/17** (`tests/real_client_test.sh` on Spotify
+1.2.95.453 Flatpak): snapshot extraction, 45 enabled + 26 disabled exp
+flags, adblock markers, flag matrix, idempotency, binary runs pre/post
+patch, byte-identical uninstall restore. Patched client launches with the
+same process tree as pristine (8 procs, no errors).
+
+Patch coverage: core adblock, logging block, `bSlot`/`bLogic` ELF stubs,
+devmode, hide-non-music, base exp subset, lyrics-bg — plus **244 synced
+flags** (`tools/generated_exp.inc`, built from `vendor/patches.json` via
 `tools/sync_from_patches.py`: 92 `DisableExp`→false + 5 ad-suppress
 `CustomExp` always-on, 131 `EnableExp`→true + 16 feature `CustomExp`
 with exp; all version-gated and `--noexp`-aware, verified).
 
 Still open: `new_theme`/`cache_limit`/`goofyHistory`/`sectionBlock.js`
-injection/`lyrics_stat` colors, ELF `block_slots` validation against real
-Linux builds, real-client test.
+injection/`lyrics_stat` colors, native `.deb`/AUR install paths.
 
 ## Credits / license
 

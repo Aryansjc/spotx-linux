@@ -230,14 +230,19 @@ xpuiDir="$xpuiPath/xpui"
 
 xpuiJs="$xpuiDir/xpui.js"
 xpuiCss="$xpuiDir/xpui.css"
+xpuiSnapshotJs="$xpuiDir/xpui-snapshot.js"
 xpuiDesktopModalsJs="$xpuiDir/xpui-desktop-modals.js"
 homeV2Js="$xpuiDir/home-v2.js"
 vendorXpuiJs="$xpuiDir/vendor~xpui.js"
+snapshotBinary="$appPath/v8_context_snapshot.bin"
 
 # ---------------- version ----------------
 clientVer=''
 if "$appBinary" --version >/dev/null 2>&1; then
   clientVer="$("$appBinary" --version 2>/dev/null | grep -oE '1\.[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
+elif [[ "$installPath" == *flatpak* ]] && command -v flatpak >/dev/null 2>&1; then
+  # Flatpak binaries need the sandbox runtime; query version from inside.
+  clientVer="$(timeout 60 flatpak run --command=/app/extra/share/spotify/spotify com.spotify.Client --version 2>/dev/null | grep -oE '1\.[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
 fi
 echo -e "Detected client version: ${clientVer:-${red}N/A${clr}}"
 if [[ -n "$clientVer" ]] && (($(ver "$clientVer") < $(ver "$SUPPORTED_MIN"))); then
@@ -258,6 +263,7 @@ if [[ -n "$stagedInstall" && -n "$protectedInstall" ]]; then
   appPath="$workDir/client"; appBinary="$appPath/spotify"; appBak="$appBinary.bak"
   xpuiPath="$appPath/Apps"; xpuiSpa="$xpuiPath/xpui.spa"; xpuiBak="$xpuiPath/xpui.bak"; xpuiDir="$xpuiPath/xpui"
   xpuiJs="$xpuiDir/xpui.js"; xpuiCss="$xpuiDir/xpui.css"
+  xpuiSnapshotJs="$xpuiDir/xpui-snapshot.js"
   xpuiDesktopModalsJs="$xpuiDir/xpui-desktop-modals.js"; homeV2Js="$xpuiDir/home-v2.js"; vendorXpuiJs="$xpuiDir/vendor~xpui.js"
   sudo_run cat -- "$targetAppBinary" > "$appBinary"
   sudo_run cat -- "$targetXpuiSpa" > "$xpuiSpa"
@@ -290,13 +296,48 @@ if [[ -f "$appBak" || -f "$xpuiBak" ]] && [[ -z "$forceSpotx" ]]; then
   echo -e "${yellow}SpotX already installed.${clr} Use -f/--force to re-patch, or --uninstall to restore."
   exit 0
 fi
-if [[ -n "$forceSpotx" && -f "$xpuiBak" ]]; then atomic_copy "$xpuiBak" "$xpuiSpa"; echo "Restored backup before re-patch."; fi
+# -f: restore BOTH pristine backups first, so re-backup below captures
+# pristine files (otherwise uninstall could never restore the originals).
+if [[ -n "$forceSpotx" ]]; then
+  [[ -f "$appBak" ]] && { atomic_copy "$appBak" "$appBinary" && echo "Restored binary backup before re-patch."; }
+  [[ -f "$xpuiBak" ]] && { atomic_copy "$xpuiBak" "$xpuiSpa" && echo "Restored xpui backup before re-patch."; }
+fi
 backup_spotx || { echo -e "${red}Error:${clr} backup failed." >&2; exit 1; }
 echo -e "${green}Created backup (.bak).${clr}"
+
+# ---------------- snapshot (newer clients: code lives in v8_context_snapshot.bin) ----------------
+# Spotify >~1.2.56 ships no top-level xpui.js; the webpack modules are embedded
+# UTF-16LE in the snapshot binary. Extract + prepend them to xpui-snapshot.js
+# (same approach as SpotX-Bash snapshot_check).
+snapshot_check() {
+  [[ -n "$snapshotBinary" && -f "$snapshotBinary" ]] || return 1
+  perl - "$snapshotBinary" "$xpuiSnapshotJs" <<'PERLEOF'
+    use strict; use warnings; use Encode qw(encode decode);
+    my ($bin, $out) = @ARGV;
+    open my $in, '<:raw', $bin or die "open $bin: $!";
+    binmode $in; local $/; my $c = <$in>; close $in;
+    die "snapshot not UTF-16LE" unless length($c) >= 2 &&
+      (substr($c, 0, 2) eq "\xFF\xFE" || substr($c, 1, 1) eq "\x00");
+    my $s = encode('UTF-16LE', 'var __webpack_modules__={');
+    my $e = encode('UTF-16LE', '//# sourceMappingURL=xpui-modules.js.map');
+    my $i = index($c, $s, 2); die "webpack start not found" if $i < 0;
+    my $j = index($c, $e, $i + length($s)); die "webpack end not found" if $j < 0;
+    my $dec = decode('UTF-16LE', substr($c, $i, $j - $i + length($e)));
+    open my $fh, '+<:encoding(UTF-8)', $out or die "open $out: $!";
+    local $/; my $old = <$fh>; seek $fh, 0, 0;
+    print $fh $dec, "\n", $old; truncate $fh, tell($fh); close $fh;
+PERLEOF
+}
 
 # ---------------- unpack ----------------
 rm -rf "$xpuiDir"; mkdir -p "$xpuiDir"
 zip_extract "$xpuiSpa" "$xpuiDir" || { echo -e "${red}Error:${clr} unpack xpui.spa failed." >&2; exit 1; }
+if [[ ! -f "$xpuiJs" && -f "$xpuiSnapshotJs" ]]; then
+  echo "Snapshot client detected — extracting webpack modules..."
+  snapshot_check || { echo -e "${red}Error:${clr} snapshot extraction failed." >&2; rm -rf "$xpuiDir"; uninstall_spotx; exit 1; }
+  xpuiCss="$xpuiDir/xpui-snapshot.css"; xpuiJs="$xpuiSnapshotJs"
+  echo -e "${green}Snapshot extracted.${clr}"
+fi
 if [[ ! -f "$xpuiJs" ]]; then echo -e "${red}Error:${clr} xpui.js not found after unpack (modified client?)." >&2; exit 1; fi
 if [[ -z "$clientVer" ]]; then
   clientVer="$(perl -ne '/[Vv]ersion[:=,\x22]{1,3}(1\.[0-9]+\.[0-9]+\.[0-9]+)\.g[0-9a-f]+/ && print "$1"' "$xpuiJs" | head -n1)"
@@ -327,11 +368,11 @@ aoEx=(
 'hideUpgradeButton&(return|.=.=>)"free"===(.+?)(return|.=.=>)"premium"===&$1"premium"===$2$3"free"===&g&xpuiJs&1.1.59.710&1.1.92.647'
 'adsCosmos&(case .:|async enable\(.\)\{)(this.enabled=.+?\(.{1,3},"audio"\),|return this.enabled=...+?\(.{1,3},"audio"\))((;case 4:)?this.subscription=this.audioApi).+?this.onAdMessage\)&$1$3.cosmosConnector.increaseStreamTime(-100000000000)&&xpuiJs&1.1.59.710&1.1.92.647'
 'connectOld& connect-device-list-item--disabled&&&&xpuiJs&1.1.70.610&1.1.90.859'
-'logSentry&sentry\.io&localhost.io&&xpuiJs&1.1.70.610'
+'logSentry&sentry\.io&localhost.io&g&xpuiJs&1.1.70.610'
 'logV3&sp://logging/v3/\w+&&g&xpuiJs&1.1.70.610'
 )
 freeEx=(
-'esperantoProductState&(this\.(?:productStateApi|_product_state)(?:|_service)=(.))(?=}|(?:,.{1,30})?,this\.productStateApi|,this\._events)&$1,$2.putOverridesValues({pairs:{ads:'\''0'\'',catalogue:'\''premium'\'',type:'\''premium'\'',name:'\''Spotify'\''}})&&xpuiJs'
+'esperantoProductState&(this\.(?:productStateApi|_product_state)(?:|_service)=(.))(?=}|(?:,.{1,30})?,this\.productStateApi|,this\._events)&$1,$2.putOverridesValues({pairs:{ads:'\''0'\'',catalogue:'\''premium'\'',type:'\''premium'\'',name:'\''Spotify'\''}})&g&xpuiJs'
 'hideDlQual&(\(.,..jsxs\)\(.{1,3}|(.\(\).|..)createElement\(.{1,4}),\{(filterMatchQuery|filter:.,title|(variant:"viola",semanticColor:"textSubdued"|..:"span",variant:.{3,6}mesto,color:.{3,6}),htmlFor:"desktop.settings.downloadQuality.+?).{1,6}get\("desktop.settings.downloadQuality.title.+?(children:.{1,2}\(.,.\).+?,|\(.,.\){3,4},|,.\)}},.\(.,.\)\),)&&&xpuiJs&1.1.59.710&1.2.29.605'
 )
 # Binary (ELF) ad/logic stubs — byte-zeroing like SpotX-Bash freeEx bSlot/bLogic.
